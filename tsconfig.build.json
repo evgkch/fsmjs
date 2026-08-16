@@ -1,0 +1,15 @@
+{
+  // Build config: emit dist/ (JS + declarations) from src/ only.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "es2020",
+    "moduleResolution": "node",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "allowImportingTsExtensions": false
+  },
+  "include": ["src"]
+}

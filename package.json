@@ -1,0 +1,70 @@
+{
+  "name": "@evgkch/fsmjs",
+  "version": "0.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "A small, typed Mealy state machine: one table of rules, a context that belongs to the state rather than the machine, and a graph that is a projection of the same object — serialize it, draw it, analyse it",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "dist/core/index.js",
+  "browser": "dist/core/index.js",
+  "types": "dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./analysis": {
+      "types": "./dist/analysis/index.d.ts",
+      "default": "./dist/analysis/index.js"
+    },
+    "./debug": {
+      "types": "./dist/debug/index.d.ts",
+      "default": "./dist/debug/index.js"
+    },
+    "./formatters": {
+      "types": "./dist/formatters/index.d.ts",
+      "default": "./dist/formatters/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.4.2",
+    "prettier": "^3.9.6",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/evgkch/fsmjs.git"
+  },
+  "keywords": [
+    "fsm",
+    "state-machine",
+    "finite-state-machine",
+    "mealy",
+    "transducer",
+    "typescript",
+    "typestate",
+    "discriminated-union"
+  ],
+  "author": "Evgeny Kucherenko",
+  "license": "MIT",
+  "homepage": "https://github.com/evgkch/fsmjs",
+  "dependencies": {
+    "@evgkch/channeljs": "^1.1.0"
+  }
+}
