@@ -1,7 +1,7 @@
 import type { Analysis, Issue, Path } from "./types.js";
 export type { Analysis, Issue, Path } from "./types.js";
 /** A schema's shape: all nodes, reachability from `start`, and terminal (dead-end) nodes. */
-export declare function analyze<T, Q extends string = string>(schema: T, start?: Q): Analysis<Q>;
+export declare function analyze<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Analysis<Q>;
 /**
  * Turn `analyze` facts plus the cell-level lints into a severity-ranked report.
  *
@@ -20,11 +20,11 @@ export declare function analyze<T, Q extends string = string>(schema: T, start?:
  * legitimate outcome. That is the partiality of δ, and the reason `dispatch` returns a
  * boolean. Reporting it flagged every machine that meant it.
  */
-export declare function validate<T, Q extends string = string>(schema: T, start?: Q): Issue<Q>[];
+export declare function validate<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Issue<Q>[];
 /**
  * Enumerate every simple path from `from`: acyclic runs ending at a dead end
  * (`kind: 'terminal'`) and loops that revisit a node already on the path
  * (`kind: 'cycle'`, whose last node repeats an earlier one). Pure; the count can grow
  * large on dense graphs, since it lists all simple paths.
  */
-export declare function paths<T, Q extends string = string>(schema: T, from: Q): Path<Q>[];
+export declare function paths<T, Q extends PropertyKey = PropertyKey>(schema: T, from: Q): Path<Q>[];

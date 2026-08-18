@@ -30,7 +30,7 @@ import type { Edge } from "../core/types.js";
 export type Formatter<T, Opts = never> = (value: T, options?: Opts) => string;
 
 /** Options for the diagram-language renderers (`toMermaid`, `toDot`). */
-export type RenderOptions<Q extends string> = {
+export type RenderOptions<Q extends PropertyKey> = {
   /** Highlight this node as the current state (pass `fsm.state` for a live view). */
   current?: Q;
   /** Draw an initial-state marker pointing at this node. */
@@ -47,7 +47,7 @@ export type RenderOptions<Q extends string> = {
  * Deliberately not `RenderOptions & …`: a tree has no layout to direct and no arrow to hang a
  * start marker on, so inheriting `start` and `direction` would offer two options that do nothing.
  */
-export type TextOptions<Q extends string> = {
+export type TextOptions<Q extends PropertyKey> = {
   /** Mark this node as the current one (pass `fsm.state` for a live view). */
   current?: Q;
   /** Wrap the current node in an ANSI inverse-video escape (terminal colour). Default false. */

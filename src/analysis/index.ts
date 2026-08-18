@@ -24,7 +24,7 @@ import type { Analysis, Issue, Path } from "./types.js";
 export type { Analysis, Issue, Path } from "./types.js";
 
 /** A schema's shape: all nodes, reachability from `start`, and terminal (dead-end) nodes. */
-export function analyze<T, Q extends string = string>(
+export function analyze<T, Q extends PropertyKey = PropertyKey>(
   schema: T,
   start?: Q,
 ): Analysis<Q> {
@@ -71,7 +71,7 @@ export function analyze<T, Q extends string = string>(
  * legitimate outcome. That is the partiality of δ, and the reason `dispatch` returns a
  * boolean. Reporting it flagged every machine that meant it.
  */
-export function validate<T, Q extends string = string>(
+export function validate<T, Q extends PropertyKey = PropertyKey>(
   schema: T,
   start?: Q,
 ): Issue<Q>[] {
@@ -84,7 +84,7 @@ export function validate<T, Q extends string = string>(
       severity: "error",
       kind: "unreachable",
       node,
-      message: `node "${node}" is unreachable from "${start}"`,
+      message: `node "${String(node)}" is unreachable from "${String(start)}"`,
     });
 
   for (const node of terminal)
@@ -92,13 +92,13 @@ export function validate<T, Q extends string = string>(
       severity: "warning",
       kind: "terminal",
       node,
-      message: `node "${node}" has no outgoing transitions`,
+      message: `node "${String(node)}" has no outgoing transitions`,
     });
 
   // Group the rows back into cells: one cell is one (node, event) pair.
   const cells = new Map<string, Edge<Q>[]>();
   for (const row of rows) {
-    const key = `${row.from}\0${row.on}`;
+    const key = `${String(row.from)}\0${String(row.on)}`;
     (cells.get(key) ?? cells.set(key, []).get(key)!).push(row);
   }
 
@@ -116,7 +116,7 @@ export function validate<T, Q extends string = string>(
     // code, and says so by staying quiet.
     const seen = new Map<string, unknown[]>();
     for (const row of list) {
-      const key = `${row.to}\0${row.emit ?? ""}`;
+      const key = `${String(row.to)}\0${String(row.emit ?? "")}`;
       const guards = seen.get(key) ?? seen.set(key, []).get(key)!;
       if (typeof row.when !== "string" && guards.includes(row.when))
         issues.push({
@@ -124,7 +124,7 @@ export function validate<T, Q extends string = string>(
           kind: "duplicate-edge",
           node,
           event,
-          message: `cell "${event}" at "${node}" repeats the edge to "${row.to}"`,
+          message: `cell "${String(event)}" at "${String(node)}" repeats the edge to "${String(row.to)}"`,
         });
       guards.push(row.when);
     }
@@ -137,7 +137,7 @@ export function validate<T, Q extends string = string>(
         kind: "dead-rule",
         node,
         event,
-        message: `cell "${event}" at "${node}": rule ${open + 1} has no guard, so the ${list.length - open - 1} after it can never fire`,
+        message: `cell "${String(event)}" at "${String(node)}": rule ${open + 1} has no guard, so the ${list.length - open - 1} after it can never fire`,
       });
   }
 
@@ -150,7 +150,7 @@ export function validate<T, Q extends string = string>(
  * (`kind: 'cycle'`, whose last node repeats an earlier one). Pure; the count can grow
  * large on dense graphs, since it lists all simple paths.
  */
-export function paths<T, Q extends string = string>(
+export function paths<T, Q extends PropertyKey = PropertyKey>(
   schema: T,
   from: Q,
 ): Path<Q>[] {

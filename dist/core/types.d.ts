@@ -25,8 +25,9 @@
  * performs most of that forgetting on its own: a function held as a property simply does not
  * survive.
  *
- * Most, not all. What survives a dump is each operation's *name* — `when: 'short'`,
- * `with: 'collect'`, `by: 'refund'`, or `'?'` for one the author never named. A name is not the
+ * Most, not all. What survives a dump is each operation's *name*, in the place the operation
+ * stood — `when: 'short'`, `to: ['idle', 'collect']`, `emit: ['vend', 'refund']`, or `'?'` for one
+ * the author never named. A name is not the
  * code and cannot be run; it says that an operation was here and what it was called, which is
  * exactly what a reader, a diagram and `validate` can use. Keeping the guard is the part that
  * is not optional: `when` decides *whether* a rule applies, so it belongs to the transition
@@ -52,7 +53,7 @@
  * construction, and an element of it is written `σ` or `q`. That is why a carrier and its key
  * set are never the same thing in a signature here.
  */
-export type Carrier = Record<string, unknown>;
+export type Carrier = Record<PropertyKey, unknown>;
 /**
  * One entry of a carrier, written on its own: `IState<'ready', Ctx>` is `{ ready: Ctx }`.
  *
@@ -72,11 +73,11 @@ export type Carrier = Record<string, unknown>;
  * out by hand. What it buys is one tag and its shape on one line, which is how a state or an
  * event is actually thought about.
  */
-export type IState<Q extends string, D = void> = {
+export type IState<Q extends PropertyKey, D = void> = {
     [q in Q]: D;
 };
 /** One entry of an input or output carrier. The same helper, named for the other axis. */
-export type IEvent<T extends string, D = void> = {
+export type IEvent<T extends PropertyKey, D = void> = {
     [t in T]: D;
 };
 /**
@@ -192,12 +193,12 @@ export type Rule<Q extends Carrier, q extends keyof Q, X, Λ extends Carrier> = 
     } & ToSlot<Q, q, r, X> & ({
         readonly emit?: never;
     } | {
-        [λ in keyof Λ & string]: void extends Λ[λ] ? {
+        [λ in keyof Λ]: void extends Λ[λ] ? {
             readonly emit: λ;
         } : {
             readonly emit: readonly [λ, By<Q[r], X, Λ[λ]> | string];
         };
-    }[keyof Λ & string]);
+    }[keyof Λ]);
 }[keyof Q];
 /**
  * The machine: state → event type → rules.
@@ -212,7 +213,7 @@ export type Rule<Q extends Carrier, q extends keyof Q, X, Λ extends Carrier> = 
  * every consumer a branch, plus one runtime error class of its own.
  *
  * Two rules may share a target: each carries its own guard and its own operations, so
- * `[{ to: 'x', with: a, when: p }, { to: 'x', with: b, when: q }]` is two distinct rules, not
+ * `[{ when: p, to: ['x', a] }, { when: q, to: ['x', b] }]` is two distinct rules, not
  * a collision. Nothing addresses a rule by anything but its position in the list — which is
  * what the previous two-artifact form got wrong, having keyed the code by target.
  */
@@ -243,8 +244,8 @@ export type Schema<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = 
 export type Graph<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = {
     readonly [q in keyof Q]?: {
         readonly [σ in keyof Σ]?: readonly {
-            readonly to: (keyof Q & string) | readonly [keyof Q & string, string];
-            readonly emit?: (keyof Λ & string) | readonly [keyof Λ & string, string];
+            readonly to: keyof Q | readonly [keyof Q, string];
+            readonly emit?: keyof Λ | readonly [keyof Λ, string];
             readonly when?: string;
         }[];
     };
@@ -266,11 +267,11 @@ export type Graph<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = {
  * turns either into a string worth printing. A reader who only asks "is this edge guarded"
  * tests `when` for presence, and gets the same answer whichever form it is in.
  */
-export type Edge<N extends string = string> = {
+export type Edge<N extends PropertyKey = PropertyKey> = {
     readonly from: N;
-    readonly on: string;
+    readonly on: PropertyKey;
     readonly to: N;
-    readonly emit?: string;
+    readonly emit?: PropertyKey;
     readonly when?: Function | string;
     readonly with?: Function | string;
     readonly by?: Function | string;
@@ -284,10 +285,16 @@ export type Edge<N extends string = string> = {
 export type EdgeNodes<C> = C extends readonly (infer E)[] ? E extends {
     to: infer R;
 } ? R extends readonly [infer N, unknown] ? N : R : never : never;
-/** Q — every state a schema names, as a key or as some rule's target. */
-export type Nodes<T> = (keyof T & string) | {
+/**
+ * Q — every state a schema names, as a key or as some rule's target.
+ *
+ * Intersected with `PropertyKey` to drop the `undefined` that an optional cell leaks in: `T[q]`
+ * is `… | undefined`, and reading `keyof` through it lets that `undefined` into the node set,
+ * where it is not a state and no graph walk should meet it.
+ */
+export type Nodes<T> = (keyof T | {
     [q in keyof T]: {
         [σ in keyof T[q]]: EdgeNodes<T[q][σ]>;
     }[keyof T[q]];
-}[keyof T];
+}[keyof T]) & PropertyKey;
 export {};

@@ -18,7 +18,7 @@
 
 A TypeScript library implementing a Mealy state machine with state‑dependent context. The machine is defined by a schema — a typed transition structure that can be analyzed, formatted, and visualized.
 
-A complete walkthrough from problem statement to a working machine is available in the [“Selection Rectangle” example](https://github.com/evgkch/fsmjs-examples/blob/master/selection-rect/README.md), which also runs as a [live page](https://evgkch.github.io/fsmjs/selection-rect/). The sources of every example are kept in a repository of their own, [`evgkch/fsmjs-examples`](https://github.com/evgkch/fsmjs-examples).
+Complete, runnable examples live in a repository of their own, [`evgkch/fsmjs-examples`](https://github.com/evgkch/fsmjs-examples), and are hosted at [evgkch.github.io/fsmjs](https://evgkch.github.io/fsmjs/).
 
 ---
 
@@ -413,35 +413,33 @@ class StateMachine<Q extends Carrier, Σ extends Carrier, Λ extends Carrier = �
     readonly schema: Schema<Q, Σ, Λ>;
     get state(): FsmState<Q>;
     get rx(): Rx<...>;
-    // two overloads: an event that carries nothing, and one that carries data
-    dispatch<σ extends Bare<Σ> & string>(type: σ): boolean;
-    dispatch<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
-    can<σ extends Bare<Σ> & string>(type: σ): boolean;
-    can<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
+    // one signature: the event's name alone, or the name and its payload
+    can(...args: Args<Σ>): boolean;
+    dispatch(...args: Args<Σ>): boolean;
     restore(state: FsmState<Q>): void;
     toJSON(): Graph<Q, Σ, Λ>;
 }
 
-type IState<Q extends string, D = void> = { [q in Q]: D };
-type IEvent<T extends string, D = void> = { [t in T]: D };
+type IState<Q extends PropertyKey, D = void> = { [q in Q]: D };
+type IEvent<T extends PropertyKey, D = void> = { [t in T]: D };
 type Merge<U> = { ... };
 
-function edges<T>(schema: T): Edge<Nodes<T> & string>[];
-function nodes<T>(schema: T): (Nodes<T> & string)[];
+function edges<T>(schema: T): Edge<Nodes<T>>[];
+function nodes<T>(schema: T): Nodes<T>[];
 function graph<T, Σ extends Carrier = Carrier, Λ extends Carrier = Carrier>(
     schema: T,
-): Graph<IState<Nodes<T> & string, unknown>, Σ, Λ>;
+): Graph<IState<Nodes<T>, unknown>, Σ, Λ>;
 function nameOf(operation: Function | string | undefined, slot: string): string | undefined;
 // the two halves of a `to` or an `emit` pair
-function nameIn(slot: Slot | undefined): string | undefined;
+function nameIn(slot: Slot | undefined): PropertyKey | undefined;
 function opIn(slot: Slot | undefined): Op | undefined;
 
 // the shape every machine satisfies, for code that handles machines generically
 type AnyMachine = {
-    readonly state: { readonly type: string };
+    readonly state: { readonly type: PropertyKey };
     readonly rx: { on(msg: typeof TRANSITION, hear: (t: AnyTransition) => void): Off };
-    can(type: string, payload?: unknown): boolean;
-    dispatch(type: string, payload?: unknown): boolean;
+    can(type: PropertyKey, payload?: unknown): boolean;
+    dispatch(type: PropertyKey, payload?: unknown): boolean;
     toJSON(): unknown;
 };
 
@@ -449,7 +447,7 @@ class DispatchInsideHandlerError extends Error {}
 const TRANSITION: unique symbol;
 ```
 
-`Bare<Σ>` and `Loaded<Σ>` in the signatures above are internal types and are not exported. They split the input alphabet into events that carry no data and events that do, which is where the two overloads of `dispatch` and `can` come from.
+`Args<Σ>` in the signatures above is an internal type and is not exported. It is the one type behind both calls — the event's name alone where it carries nothing, the name and its payload where it does — a single tuple union instead of two overloads.
 
 Exported types: `Carrier`, `IState`, `IEvent`, `Merge`, `FsmState`, `FsmEvent`, `When`, `With`, `By`, `Rule`, `Schema`, `Graph`, `Edge`, `Nodes`, `Transition`, `AnyTransition`, `AnyMachine`, `Off`.
 
@@ -460,9 +458,9 @@ Exported types: `Carrier`, `IState`, `IEvent`, `Merge`, `FsmState`, `FsmEvent`, 
 Static checking of the schema: the machine is not run, guard functions are not called. The analysis relies on the structure of the graph — the `to` and `emit` fields and the presence of a `when` — but never on what a guard returns. A schema with code and the same schema restored from JSON therefore give the same result.
 
 ```ts
-function analyze<T, Q extends string = string>(schema: T, start?: Q): Analysis<Q>;
-function validate<T, Q extends string = string>(schema: T, start?: Q): Issue<Q>[];
-function paths<T, Q extends string = string>(schema: T, from: Q): Path<Q>[];
+function analyze<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Analysis<Q>;
+function validate<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Issue<Q>[];
+function paths<T, Q extends PropertyKey = PropertyKey>(schema: T, from: Q): Path<Q>[];
 ```
 
 ### `analyze`
@@ -522,11 +520,11 @@ The prefix in a name says what the function takes: `to*` takes a schema, `format
 ```ts
 type Formatter<T, Opts = never> = (value: T, options?: Opts) => string;
 
-const toMermaid: Formatter<unknown, RenderOptions<string>>;
-const toDot: Formatter<unknown, RenderOptions<string>>;
-const toTree: Formatter<unknown, TextOptions<string>>;
+const toMermaid: Formatter<unknown, RenderOptions<PropertyKey>>;
+const toDot: Formatter<unknown, RenderOptions<PropertyKey>>;
+const toTree: Formatter<unknown, TextOptions<PropertyKey>>;
 const toRules: Formatter<unknown>;
-const formatIssues: Formatter<Issue<string>[], FormatOptions>;
+const formatIssues: Formatter<Issue<PropertyKey>[], FormatOptions>;
 const edgeLabel: (edge: Edge) => string;
 ```
 

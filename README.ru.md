@@ -18,7 +18,7 @@
 
 Библиотека реализует автомат Мили с контекстом, привязанным к состоянию. Автомат задаётся схемой — типизированной структурой переходов, которую можно анализировать, форматировать и визуализировать.
 
-Полный разбор задачи от постановки до готового автомата приведён в примере [«Прямоугольник выделения»](https://github.com/evgkch/fsmjs-examples/blob/master/selection-rect/README.ru.md); он же открывается [как страница](https://evgkch.github.io/fsmjs/selection-rect/). Исходники всех примеров лежат в отдельном репозитории [`evgkch/fsmjs-examples`](https://github.com/evgkch/fsmjs-examples).
+Готовые примеры лежат в отдельном репозитории [`evgkch/fsmjs-examples`](https://github.com/evgkch/fsmjs-examples) и выложены на [evgkch.github.io/fsmjs](https://evgkch.github.io/fsmjs/).
 
 ---
 
@@ -413,35 +413,33 @@ class StateMachine<Q extends Carrier, Σ extends Carrier, Λ extends Carrier = �
     readonly schema: Schema<Q, Σ, Λ>;
     get state(): FsmState<Q>;
     get rx(): Rx<...>;
-    // две перегрузки: событие без данных и событие с данными
-    dispatch<σ extends Bare<Σ> & string>(type: σ): boolean;
-    dispatch<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
-    can<σ extends Bare<Σ> & string>(type: σ): boolean;
-    can<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
+    // одна сигнатура: имя события, или имя и его данные
+    can(...args: Args<Σ>): boolean;
+    dispatch(...args: Args<Σ>): boolean;
     restore(state: FsmState<Q>): void;
     toJSON(): Graph<Q, Σ, Λ>;
 }
 
-type IState<Q extends string, D = void> = { [q in Q]: D };
-type IEvent<T extends string, D = void> = { [t in T]: D };
+type IState<Q extends PropertyKey, D = void> = { [q in Q]: D };
+type IEvent<T extends PropertyKey, D = void> = { [t in T]: D };
 type Merge<U> = { ... };
 
-function edges<T>(schema: T): Edge<Nodes<T> & string>[];
-function nodes<T>(schema: T): (Nodes<T> & string)[];
+function edges<T>(schema: T): Edge<Nodes<T>>[];
+function nodes<T>(schema: T): Nodes<T>[];
 function graph<T, Σ extends Carrier = Carrier, Λ extends Carrier = Carrier>(
     schema: T,
-): Graph<IState<Nodes<T> & string, unknown>, Σ, Λ>;
+): Graph<IState<Nodes<T>, unknown>, Σ, Λ>;
 function nameOf(operation: Function | string | undefined, slot: string): string | undefined;
 // две половины пары `to` или `emit`
-function nameIn(slot: Slot | undefined): string | undefined;
+function nameIn(slot: Slot | undefined): PropertyKey | undefined;
 function opIn(slot: Slot | undefined): Op | undefined;
 
 // общая форма любого автомата, для кода, который работает с автоматами вообще
 type AnyMachine = {
-    readonly state: { readonly type: string };
+    readonly state: { readonly type: PropertyKey };
     readonly rx: { on(msg: typeof TRANSITION, hear: (t: AnyTransition) => void): Off };
-    can(type: string, payload?: unknown): boolean;
-    dispatch(type: string, payload?: unknown): boolean;
+    can(type: PropertyKey, payload?: unknown): boolean;
+    dispatch(type: PropertyKey, payload?: unknown): boolean;
     toJSON(): unknown;
 };
 
@@ -449,7 +447,7 @@ class DispatchInsideHandlerError extends Error {}
 const TRANSITION: unique symbol;
 ```
 
-`Bare<Σ>` и `Loaded<Σ>` в сигнатурах выше — внутренние типы, они не экспортируются. Это разбиение входного алфавита на события без данных и события с данными; из него и получаются две перегрузки `dispatch` и `can`.
+`Args<Σ>` в сигнатурах выше — внутренний тип, он не экспортируется. Это единственный тип за обоими вызовами: где событие ничего не несёт — только имя, где несёт — имя вместе с данными; одно объединение кортежей вместо двух перегрузок.
 
 Экспортируемые типы: `Carrier`, `IState`, `IEvent`, `Merge`, `FsmState`, `FsmEvent`, `When`, `With`, `By`, `Rule`, `Schema`, `Graph`, `Edge`, `Nodes`, `Transition`, `AnyTransition`, `AnyMachine`, `Off`.
 
@@ -460,9 +458,9 @@ const TRANSITION: unique symbol;
 Статическая проверка схемы: автомат не запускается, условия не вызываются. Анализ опирается на структуру графа — поля `to`, `emit` и наличие `when`, — но не на то, какое значение возвращает условие. Поэтому схема с кодом и та же схема, восстановленная из JSON, дают одинаковый результат.
 
 ```ts
-function analyze<T, Q extends string = string>(schema: T, start?: Q): Analysis<Q>;
-function validate<T, Q extends string = string>(schema: T, start?: Q): Issue<Q>[];
-function paths<T, Q extends string = string>(schema: T, from: Q): Path<Q>[];
+function analyze<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Analysis<Q>;
+function validate<T, Q extends PropertyKey = PropertyKey>(schema: T, start?: Q): Issue<Q>[];
+function paths<T, Q extends PropertyKey = PropertyKey>(schema: T, from: Q): Path<Q>[];
 ```
 
 ### `analyze`
@@ -522,11 +520,11 @@ console.log(formatIssues(validate(vm.schema, "idle")));
 ```ts
 type Formatter<T, Opts = never> = (value: T, options?: Opts) => string;
 
-const toMermaid: Formatter<unknown, RenderOptions<string>>;
-const toDot: Formatter<unknown, RenderOptions<string>>;
-const toTree: Formatter<unknown, TextOptions<string>>;
+const toMermaid: Formatter<unknown, RenderOptions<PropertyKey>>;
+const toDot: Formatter<unknown, RenderOptions<PropertyKey>>;
+const toTree: Formatter<unknown, TextOptions<PropertyKey>>;
 const toRules: Formatter<unknown>;
-const formatIssues: Formatter<Issue<string>[], FormatOptions>;
+const formatIssues: Formatter<Issue<PropertyKey>[], FormatOptions>;
 const edgeLabel: (edge: Edge) => string;
 ```
 

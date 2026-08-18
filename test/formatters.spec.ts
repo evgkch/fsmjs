@@ -155,7 +155,7 @@ describe("toTree — the adjacency tree", () => {
 
 describe("a label of your own", () => {
   it("stands in for the default in every renderer that draws edges", () => {
-    const brief = (r: { on: string }) => r.on;
+    const brief = (r: { on: PropertyKey }) => String(r.on);
     expect(toMermaid({ a: { go: [{ to: "b" }] } }, { label: brief })).toContain(
       "a --> b: go",
     );

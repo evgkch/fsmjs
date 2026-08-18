@@ -47,13 +47,13 @@ export const LABELS = [
 const said = (row: Edge, word: Word): string | undefined => {
   switch (word) {
     case "FROM":
-      return row.from;
+      return String(row.from);
     case "ON":
-      return row.on;
+      return String(row.on);
     case "TO":
-      return row.to;
+      return String(row.to);
     case "EMIT":
-      return row.emit;
+      return row.emit === undefined ? undefined : String(row.emit);
     case "WHEN":
       return nameOf(row.when, "when");
     case "WITH":

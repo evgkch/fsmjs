@@ -65,10 +65,10 @@ export const edgeLabel = (row: Edge): string => {
   const when = nameOf(row.when, "when");
   const with_ = nameOf(row.with, "with");
   return (
-    `ON ${row.on}` +
+    `ON ${String(row.on)}` +
     (when ? ` WHEN ${when}` : "") +
     (with_ ? ` WITH ${with_}` : "") +
-    (row.emit ? ` EMIT ${row.emit}` : "")
+    (row.emit ? ` EMIT ${String(row.emit)}` : "")
   );
 };
 
@@ -77,25 +77,25 @@ const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 
 /** Mermaid `stateDiagram-v2` (paste into Markdown). */
-export const toMermaid: Formatter<unknown, RenderOptions<string>> = (
+export const toMermaid: Formatter<unknown, RenderOptions<PropertyKey>> = (
   schema,
   options,
 ) => {
   const lines = ["stateDiagram-v2"];
   if (options?.direction) lines.push(`    direction ${options.direction}`);
-  if (options?.start !== undefined) lines.push(`    [*] --> ${options.start}`);
+  if (options?.start !== undefined) lines.push(`    [*] --> ${String(options.start)}`);
   const say = options?.label ?? edgeLabel;
   for (const row of edges(schema))
     lines.push(`    ${row.from} --> ${row.to}: ${say(row)}`);
   if (options?.current !== undefined) {
     lines.push("    classDef current fill:#4f46e5,color:#fff,font-weight:bold");
-    lines.push(`    class ${options.current} current`);
+    lines.push(`    class ${String(options.current)} current`);
   }
   return lines.join("\n");
 };
 
 /** Graphviz DOT. */
-export const toDot: Formatter<unknown, RenderOptions<string>> = (
+export const toDot: Formatter<unknown, RenderOptions<PropertyKey>> = (
   schema,
   options,
 ) => {
@@ -103,11 +103,11 @@ export const toDot: Formatter<unknown, RenderOptions<string>> = (
   if (options?.direction) lines.push(`    rankdir=${options.direction};`);
   if (options?.start !== undefined) {
     lines.push("    __start [shape=point];");
-    lines.push(`    __start -> "${options.start}";`);
+    lines.push(`    __start -> "${String(options.start)}";`);
   }
   if (options?.current !== undefined)
     lines.push(
-      `    "${options.current}" [style=filled fillcolor="#4f46e5" fontcolor=white];`,
+      `    "${String(options.current)}" [style=filled fillcolor="#4f46e5" fontcolor=white];`,
     );
   const say = options?.label ?? edgeLabel;
   for (const row of edges(schema))
@@ -126,7 +126,7 @@ export const toDot: Formatter<unknown, RenderOptions<string>> = (
  * Pass `at` to print one node's slice instead of the whole machine — the cheap answer to "what
  * does this node do", which is one lookup because the schema is keyed by node first.
  */
-export const toTree: Formatter<unknown, TextOptions<string>> = (
+export const toTree: Formatter<unknown, TextOptions<PropertyKey>> = (
   schema,
   options,
 ) => {
@@ -136,16 +136,16 @@ export const toTree: Formatter<unknown, TextOptions<string>> = (
 
   for (const node of options?.at !== undefined
     ? [options.at]
-    : (nodes(schema) as string[])) {
+    : (nodes(schema) as PropertyKey[])) {
     const outgoing = rows.filter((r) => r.from === node);
     const mark =
       options?.current === node ? " ●" : outgoing.length === 0 ? " ∎" : "";
     const name =
-      options?.color && options?.current === node ? invert(node) : node;
+      options?.color && options?.current === node ? invert(String(node)) : String(node);
     lines.push(`${name}${mark}`);
     outgoing.forEach((row, i) =>
       lines.push(
-        `  ${i === outgoing.length - 1 ? "└─" : "├─"} ${say(row)} → ${row.to}`,
+        `  ${i === outgoing.length - 1 ? "└─" : "├─"} ${say(row)} → ${String(row.to)}`,
       ),
     );
   }
@@ -181,7 +181,7 @@ export const toRules: Formatter<unknown> = (schema) => {
 };
 
 /** A `validate` report for the terminal (✗ error / ⚠ warning per line). */
-export const formatIssues: Formatter<Issue<string>[], FormatOptions> = (
+export const formatIssues: Formatter<Issue<PropertyKey>[], FormatOptions> = (
   issues,
   options,
 ) => {

@@ -68,7 +68,7 @@ const freeze = <C>(context: C): C =>
 type Op = ((context: never, payload: never) => unknown) | string;
 
 /** A target or a letter: the name alone, or the name with what fills it. */
-type Slot = string | readonly [string, Op | null];
+type Slot = PropertyKey | readonly [PropertyKey, Op | null];
 
 type LooseRule = {
   // The operations are taken at their loosest here: `Readonly<C>` in the precise types does
@@ -86,19 +86,24 @@ type LooseRule = {
  * one — so "a name, or a name and its operation" is a fact about the schema's shape and not a
  * branch each consumer writes for itself, slightly differently, until one of them forgets.
  */
-export const nameIn = (slot: Slot | undefined): string | undefined =>
-  slot === undefined ? undefined : typeof slot === "string" ? slot : slot[0];
+const isPair = (
+  slot: Slot | undefined,
+): slot is readonly [PropertyKey, Op | null] =>
+  slot !== undefined && Array.isArray(slot);
+
+export const nameIn = (slot: Slot | undefined): PropertyKey | undefined =>
+  isPair(slot) ? slot[0] : slot;
 
 export const opIn = (slot: Slot | undefined): Op | undefined => {
-  if (slot === undefined || typeof slot === "string") return undefined;
+  if (!isPair(slot)) return undefined;
   // Same reason as in `nameOf`: a pair off a plain `stringify` is `["ready", null]`, and a null
   // carrier is no carrier — not a carrier that crashes whoever asks it its name.
   return slot[1] ?? undefined;
 };
 
 type LooseSchema = Record<
-  string,
-  Record<string, LooseRule[] | undefined> | undefined
+  PropertyKey,
+  Record<PropertyKey, LooseRule[] | undefined> | undefined
 >;
 
 /**
@@ -108,8 +113,8 @@ type LooseSchema = Record<
  * column per fact, so nothing is taken apart here. Operations ride along as themselves; a row
  * off a JSON-loaded schema has none.
  */
-export function edges<T>(schema: T): Edge<Nodes<T> & string>[] {
-  type Q = Nodes<T> & string;
+export function edges<T>(schema: T): Edge<Nodes<T>>[] {
+  type Q = Nodes<T>;
   const rows: Edge<Q>[] = [];
   for (const [from, byLetter] of Object.entries((schema ?? {}) as LooseSchema))
     for (const [on, cell] of Object.entries(byLetter ?? {}))
@@ -139,10 +144,10 @@ export function edges<T>(schema: T): Edge<Nodes<T> & string>[] {
  * at all, and reading the node set off `edges` alone would hide it from exactly the checks
  * meant to find it.
  */
-export function nodes<T>(schema: T): (Nodes<T> & string)[] {
-  const found = new Set<string>(Object.keys((schema ?? {}) as object));
+export function nodes<T>(schema: T): Nodes<T>[] {
+  const found = new Set<PropertyKey>(Object.keys((schema ?? {}) as object));
   for (const row of edges(schema)) found.add(row.to);
-  return [...found] as (Nodes<T> & string)[];
+  return [...found] as Nodes<T>[];
 }
 
 /**
@@ -187,7 +192,7 @@ export function graph<
   T,
   Σ extends Carrier = Carrier,
   Λ extends Carrier = Carrier,
->(schema: T): Graph<IState<Nodes<T> & string, unknown>, Σ, Λ> {
+>(schema: T): Graph<IState<Nodes<T>, unknown>, Σ, Λ> {
   const out: Record<string, Record<string, unknown[]>> = {};
   for (const [q, byLetter] of Object.entries((schema ?? {}) as LooseSchema)) {
     const cells: Record<string, unknown[]> = (out[q] = {});
@@ -211,21 +216,28 @@ export function graph<
         };
       });
   }
-  return out as unknown as Graph<IState<Nodes<T> & string, unknown>, Σ, Λ>;
+  return out as unknown as Graph<IState<Nodes<T>, unknown>, Σ, Λ>;
 }
 
 /**
- * The input alphabet, split by whether an event type carries anything — internal.
+ * The one type behind the two calls — `dispatch` and `can` — as a variadic tuple union:
+ * `[type]` for an event that carries nothing, `[type, payload]` for one that does.
  *
- * `dispatch` and `can` are declared as two overloads rather than one signature over a
- * variadic tuple, and this is what lets them be: one takes a type alone, the other a type and
- * its payload. Two plain parameters read as two parameters, and the compiler still refuses a
- * payload where there is nothing to attach and demands one where there is.
+ * One signature rather than the two overloads that used to split the alphabet by whether an
+ * event carries a payload. The correlation is the same — a payload is impossible where there is
+ * nothing to attach and mandatory where there is — but as a single tuple the editor offers every
+ * event name in one list, and a wrong name is reported against the concrete union of keys rather
+ * than an alias.
+ *
+ * Distributive on purpose: `keyof M` over a `Merge<…>` carrier does not reduce to a literal union
+ * on its own, so a mapped type over it stays symbolic. Distributing `K extends keyof M` folds each
+ * key separately, and the union comes out in literal shapes — `["coin"] | ["tick", { dt }]`.
  */
-type Bare<M extends Carrier> = {
-  [σ in keyof M]: void extends M[σ] ? σ : never;
-}[keyof M];
-type Loaded<M extends Carrier> = Exclude<keyof M, Bare<M>>;
+type Args<M extends Carrier> = keyof M extends infer K
+  ? K extends keyof M
+    ? void extends M[K] ? [type: K] : [type: K, payload: M[K]]
+    : never
+  : never;
 
 /** The reserved channel key a `Transition` rides on. */
 export const TRANSITION = Symbol("transition");
@@ -265,10 +277,10 @@ export interface Transition<
  * these fields, these names, nothing about what rides with them.
  */
 export type AnyTransition = {
-  readonly input: { readonly type: string };
-  readonly source: { readonly type: string };
-  readonly target: { readonly type: string };
-  readonly output?: { readonly type: string };
+  readonly input: { readonly type: PropertyKey };
+  readonly source: { readonly type: PropertyKey };
+  readonly target: { readonly type: PropertyKey };
+  readonly output?: { readonly type: PropertyKey };
   readonly at: number;
 };
 
@@ -285,12 +297,12 @@ export type AnyTransition = {
  * satisfies it without being told to.
  */
 export type AnyMachine = {
-  readonly state: { readonly type: string };
+  readonly state: { readonly type: PropertyKey };
   readonly rx: {
     on(msg: typeof TRANSITION, hear: (t: AnyTransition) => void): Off;
   };
-  can(type: string, payload?: unknown): boolean;
-  dispatch(type: string, payload?: unknown): boolean;
+  can(type: PropertyKey, payload?: unknown): boolean;
+  dispatch(type: PropertyKey, payload?: unknown): boolean;
   toJSON(): unknown;
 };
 
@@ -340,7 +352,7 @@ export class StateMachine<
   Σ extends Carrier,
   Λ extends Carrier = Σ,
 > {
-  #type: keyof Q & string;
+  #type: keyof Q;
   #context: Q[keyof Q];
   #channel?: Channel<Messages<Q, Σ, Λ>>;
   #dispatching: boolean = false;
@@ -349,7 +361,7 @@ export class StateMachine<
     readonly schema: Schema<Q, Σ, Λ>,
     start: FsmState<Q>,
   ) {
-    this.#type = start.type as keyof Q & string;
+    this.#type = start.type as keyof Q;
     this.#context = start.context as Q[keyof Q];
   }
 
@@ -389,7 +401,7 @@ export class StateMachine<
    * while `with` and `by` are total on what the search returned. `can` needs the first half
    * and stops; `dispatch` runs both.
    */
-  #rule(type: string, payload: unknown): LooseRule | undefined {
+  #rule(type: PropertyKey, payload: unknown): LooseRule | undefined {
     const cell = (this.schema as LooseSchema)[this.#type]?.[type];
     if (cell === undefined) return; // no cell here
     for (const rule of cell) {
@@ -422,9 +434,8 @@ export class StateMachine<
    * without a speculative copy of the machine because the guard is the only thing that
    * decides.
    */
-  can<σ extends Bare<Σ> & string>(type: σ): boolean;
-  can<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
-  can(type: string, payload?: unknown): boolean {
+  can(...args: Args<Σ>): boolean {
+    const [type, payload] = args;
     return this.#rule(type, payload) !== undefined;
   }
 
@@ -446,9 +457,8 @@ export class StateMachine<
    * `can` is not affected — it asks the guards a question and moves nothing, so it stays
    * answerable from inside a handler.
    */
-  dispatch<σ extends Bare<Σ> & string>(type: σ): boolean;
-  dispatch<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
-  dispatch(type: string, payload?: unknown): boolean {
+  dispatch(...args: Args<Σ>): boolean {
+    const [type, payload] = args;
     if (this.#dispatching) throw new DispatchInsideHandlerError();
 
     // The lock is held for the whole transition, not just the notifications, and released in a
@@ -495,7 +505,7 @@ export class StateMachine<
               }),
             } as unknown as FsmEvent<Λ>);
 
-      this.#type = nameIn(rule.to) as keyof Q & string;
+      this.#type = nameIn(rule.to) as keyof Q;
       this.#context = reached;
       const target = this.state;
 
@@ -537,7 +547,7 @@ export class StateMachine<
    * per-state context a loose pair could name one state and hand it another's context.
    */
   restore(start: FsmState<Q>): void {
-    this.#type = start.type as keyof Q & string;
+    this.#type = start.type as keyof Q;
     this.#context = start.context as Q[keyof Q];
   }
 

@@ -30,9 +30,30 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: examples/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            examples/package-lock.json
 
-      # The examples take the library from npm, so nothing is built here.
+      # The examples take the library from the checkout beside them rather than
+      # from the registry, so the library has to be a working package here before
+      # anything can be typechecked against it.
+      #
+      # Its dependencies are the half that is easy to miss. A `file:` dependency
+      # is a symlink, and npm does not copy the target's own dependencies into the
+      # consumer's tree — it expects the target to have them already. So
+      # `channeljs` resolved on a machine where the library had been installed
+      # once, and nowhere else; and the failure named neither of them. With the
+      # type of `rx` unresolved every listener's payload quietly became `any`, and
+      # the first `noImplicitAny` error landed three files away from the cause.
+      #
+      # Built as well as installed. `dist` is committed, so the site would come
+      # out of it either way — and then a commit that changed the source and
+      # forgot to rebuild would publish a site made from the previous one.
+      - name: Build the library
+        run: |
+          npm ci
+          npm run build
+
       - name: Build the examples
         working-directory: examples
         run: |

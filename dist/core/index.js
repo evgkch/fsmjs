@@ -42,9 +42,10 @@ const freeze = (context) => freezing ? Object.freeze(context) : context;
  * one — so "a name, or a name and its operation" is a fact about the schema's shape and not a
  * branch each consumer writes for itself, slightly differently, until one of them forgets.
  */
-export const nameIn = (slot) => slot === undefined ? undefined : typeof slot === "string" ? slot : slot[0];
+const isPair = (slot) => slot !== undefined && Array.isArray(slot);
+export const nameIn = (slot) => isPair(slot) ? slot[0] : slot;
 export const opIn = (slot) => {
-    if (slot === undefined || typeof slot === "string")
+    if (!isPair(slot))
         return undefined;
     // Same reason as in `nameOf`: a pair off a plain `stringify` is `["ready", null]`, and a null
     // carrier is no carrier — not a carrier that crashes whoever asks it its name.
@@ -214,10 +215,43 @@ export class StateMachine {
     get rx() {
         return (__classPrivateFieldSet(this, _StateMachine_channel, __classPrivateFieldGet(this, _StateMachine_channel, "f") ?? new Channel(), "f")).rx;
     }
-    can(type, payload) {
+    /**
+     * Would this message fire from here? A question, not a move: the guards run, nothing else
+     * does, and the machine does not budge.
+     *
+     * Exactly equivalent to what the next `dispatch` of the same message would return —
+     * `with` and `by` cannot refuse a rule the guard admitted, so nothing beyond the guards
+     * can change the answer. That equivalence is why the guards must be pure: asking twice
+     * has to give the same answer as asking once.
+     *
+     * This is the question a view asks — whether to enable the button — and it is answerable
+     * without a speculative copy of the machine because the guard is the only thing that
+     * decides.
+     */
+    can(...args) {
+        const [type, payload] = args;
         return __classPrivateFieldGet(this, _StateMachine_instances, "m", _StateMachine_rule).call(this, type, payload) !== undefined;
     }
-    dispatch(type, payload) {
+    /**
+     * Feed one event, from wherever the machine now is. `true` if a transition fired.
+     *
+     * One transition is that partial function, and this is the only way to take one.
+     * The operations run in the order they are named: `when` decides, `with` folds the input into
+     * the context, `by` unfolds the reached context into the output. A dispatch that fires nothing
+     * changes nothing and sends nothing.
+     *
+     * Everything here is synchronous, notifications included, so a second `dispatch` reached
+     * from inside this one — from a listener, or from `when`/`with`/`by` — would put one
+     * transition inside another and let the inner commit be overwritten by the outer. That is
+     * refused rather than allowed to happen quietly: the machine holds a lock for the length of
+     * the call and a re-entrant `dispatch` throws `DispatchInsideHandlerError`. To send an event
+     * *because* of this one, defer it with `queueMicrotask` and it lands after this call returns.
+     *
+     * `can` is not affected — it asks the guards a question and moves nothing, so it stays
+     * answerable from inside a handler.
+     */
+    dispatch(...args) {
+        const [type, payload] = args;
         if (__classPrivateFieldGet(this, _StateMachine_dispatching, "f"))
             throw new DispatchInsideHandlerError();
         // The lock is held for the whole transition, not just the notifications, and released in a

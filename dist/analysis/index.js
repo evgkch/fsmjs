@@ -68,19 +68,19 @@ export function validate(schema, start) {
             severity: "error",
             kind: "unreachable",
             node,
-            message: `node "${node}" is unreachable from "${start}"`,
+            message: `node "${String(node)}" is unreachable from "${String(start)}"`,
         });
     for (const node of terminal)
         issues.push({
             severity: "warning",
             kind: "terminal",
             node,
-            message: `node "${node}" has no outgoing transitions`,
+            message: `node "${String(node)}" has no outgoing transitions`,
         });
     // Group the rows back into cells: one cell is one (node, event) pair.
     const cells = new Map();
     for (const row of rows) {
-        const key = `${row.from}\0${row.on}`;
+        const key = `${String(row.from)}\0${String(row.on)}`;
         (cells.get(key) ?? cells.set(key, []).get(key)).push(row);
     }
     for (const list of cells.values()) {
@@ -96,7 +96,7 @@ export function validate(schema, start) {
         // code, and says so by staying quiet.
         const seen = new Map();
         for (const row of list) {
-            const key = `${row.to}\0${row.emit ?? ""}`;
+            const key = `${String(row.to)}\0${String(row.emit ?? "")}`;
             const guards = seen.get(key) ?? seen.set(key, []).get(key);
             if (typeof row.when !== "string" && guards.includes(row.when))
                 issues.push({
@@ -104,7 +104,7 @@ export function validate(schema, start) {
                     kind: "duplicate-edge",
                     node,
                     event,
-                    message: `cell "${event}" at "${node}" repeats the edge to "${row.to}"`,
+                    message: `cell "${String(event)}" at "${String(node)}" repeats the edge to "${String(row.to)}"`,
                 });
             guards.push(row.when);
         }
@@ -116,7 +116,7 @@ export function validate(schema, start) {
                 kind: "dead-rule",
                 node,
                 event,
-                message: `cell "${event}" at "${node}": rule ${open + 1} has no guard, so the ${list.length - open - 1} after it can never fire`,
+                message: `cell "${String(event)}" at "${String(node)}": rule ${open + 1} has no guard, so the ${list.length - open - 1} after it can never fire`,
             });
     }
     return issues;

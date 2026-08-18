@@ -25,8 +25,9 @@
  * performs most of that forgetting on its own: a function held as a property simply does not
  * survive.
  *
- * Most, not all. What survives a dump is each operation's *name* — `when: 'short'`,
- * `with: 'collect'`, `by: 'refund'`, or `'?'` for one the author never named. A name is not the
+ * Most, not all. What survives a dump is each operation's *name*, in the place the operation
+ * stood — `when: 'short'`, `to: ['idle', 'collect']`, `emit: ['vend', 'refund']`, or `'?'` for one
+ * the author never named. A name is not the
  * code and cannot be run; it says that an operation was here and what it was called, which is
  * exactly what a reader, a diagram and `validate` can use. Keeping the guard is the part that
  * is not optional: `when` decides *whether* a rule applies, so it belongs to the transition

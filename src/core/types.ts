@@ -54,7 +54,7 @@
  * construction, and an element of it is written `σ` or `q`. That is why a carrier and its key
  * set are never the same thing in a signature here.
  */
-export type Carrier = Record<string, unknown>;
+export type Carrier = Record<PropertyKey, unknown>;
 
 /**
  * One entry of a carrier, written on its own: `IState<'ready', Ctx>` is `{ ready: Ctx }`.
@@ -75,10 +75,10 @@ export type Carrier = Record<string, unknown>;
  * out by hand. What it buys is one tag and its shape on one line, which is how a state or an
  * event is actually thought about.
  */
-export type IState<Q extends string, D = void> = { [q in Q]: D };
+export type IState<Q extends PropertyKey, D = void> = { [q in Q]: D };
 
 /** One entry of an input or output carrier. The same helper, named for the other axis. */
-export type IEvent<T extends string, D = void> = { [t in T]: D };
+export type IEvent<T extends PropertyKey, D = void> = { [t in T]: D };
 
 /**
  * Flatten a union of one-entry carriers into a single carrier.
@@ -218,10 +218,10 @@ export type Rule<Q extends Carrier, q extends keyof Q, X, Λ extends Carrier> = 
     (
       | { readonly emit?: never }
       | {
-          [λ in keyof Λ & string]: void extends Λ[λ]
+          [λ in keyof Λ]: void extends Λ[λ]
             ? { readonly emit: λ }
             : { readonly emit: readonly [λ, By<Q[r], X, Λ[λ]> | string] };
-        }[keyof Λ & string]
+        }[keyof Λ]
     );
 }[keyof Q];
 
@@ -270,8 +270,8 @@ export type Schema<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = 
 export type Graph<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = {
   readonly [q in keyof Q]?: {
     readonly [σ in keyof Σ]?: readonly {
-      readonly to: (keyof Q & string) | readonly [keyof Q & string, string];
-      readonly emit?: (keyof Λ & string) | readonly [keyof Λ & string, string];
+      readonly to: keyof Q | readonly [keyof Q, string];
+      readonly emit?: keyof Λ | readonly [keyof Λ, string];
       readonly when?: string;
     }[];
   };
@@ -294,11 +294,11 @@ export type Graph<Q extends Carrier, Σ extends Carrier, Λ extends Carrier> = {
  * turns either into a string worth printing. A reader who only asks "is this edge guarded"
  * tests `when` for presence, and gets the same answer whichever form it is in.
  */
-export type Edge<N extends string = string> = {
+export type Edge<N extends PropertyKey = PropertyKey> = {
   readonly from: N;
-  readonly on: string;
+  readonly on: PropertyKey;
   readonly to: N;
-  readonly emit?: string;
+  readonly emit?: PropertyKey;
   readonly when?: Function | string;
   readonly with?: Function | string;
   readonly by?: Function | string;
@@ -320,12 +320,19 @@ export type EdgeNodes<C> = C extends readonly (infer E)[]
     : never
   : never;
 
-/** Q — every state a schema names, as a key or as some rule's target. */
-export type Nodes<T> =
-  | (keyof T & string)
+/**
+ * Q — every state a schema names, as a key or as some rule's target.
+ *
+ * Intersected with `PropertyKey` to drop the `undefined` that an optional cell leaks in: `T[q]`
+ * is `… | undefined`, and reading `keyof` through it lets that `undefined` into the node set,
+ * where it is not a state and no graph walk should meet it.
+ */
+export type Nodes<T> = (
+  | keyof T
   | {
       [q in keyof T]: { [σ in keyof T[q]]: EdgeNodes<T[q][σ]> }[keyof T[q]];
-    }[keyof T];
+    }[keyof T]
+) & PropertyKey;
 
 // There is deliberately no `Accepts<T, q>` / `Reached<T, σ, q>` here any more — the pair that
 // narrowed an event type to the current state's cell and the reached state to that cell's

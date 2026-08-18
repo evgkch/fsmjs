@@ -22,9 +22,9 @@ export type { Formatter, RenderOptions, TextOptions, FormatOptions, } from "./ty
  */
 export declare const edgeLabel: (row: Edge) => string;
 /** Mermaid `stateDiagram-v2` (paste into Markdown). */
-export declare const toMermaid: Formatter<unknown, RenderOptions<string>>;
+export declare const toMermaid: Formatter<unknown, RenderOptions<PropertyKey>>;
 /** Graphviz DOT. */
-export declare const toDot: Formatter<unknown, RenderOptions<string>>;
+export declare const toDot: Formatter<unknown, RenderOptions<PropertyKey>>;
 /**
  * Plain-text adjacency tree for the terminal — current node `●`, dead ends `∎`.
  *
@@ -35,7 +35,7 @@ export declare const toDot: Formatter<unknown, RenderOptions<string>>;
  * Pass `at` to print one node's slice instead of the whole machine — the cheap answer to "what
  * does this node do", which is one lookup because the schema is keyed by node first.
  */
-export declare const toTree: Formatter<unknown, TextOptions<string>>;
+export declare const toTree: Formatter<unknown, TextOptions<PropertyKey>>;
 /**
  * Schema dump as rules — one sentence per rule, `FROM ON WHEN TO WITH EMIT BY`:
  *
@@ -60,4 +60,4 @@ export declare const toTree: Formatter<unknown, TextOptions<string>>;
  */
 export declare const toRules: Formatter<unknown>;
 /** A `validate` report for the terminal (✗ error / ⚠ warning per line). */
-export declare const formatIssues: Formatter<Issue<string>[], FormatOptions>;
+export declare const formatIssues: Formatter<Issue<PropertyKey>[], FormatOptions>;

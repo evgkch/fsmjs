@@ -10,15 +10,8 @@ export type { Schema, Graph, FsmState, FsmEvent, Carrier, Nodes, Edge, Rule, Whe
 /** An operation as it may be found: code where the schema still has any, a name off a dump. */
 type Op = ((context: never, payload: never) => unknown) | string;
 /** A target or a letter: the name alone, or the name with what fills it. */
-type Slot = string | readonly [string, Op | null];
-/**
- * The two halves of a slot, and the only place in this library that knows a slot has two forms.
- *
- * Every reader asks through these — `edges` before it hands a row on, `dispatch` before it runs
- * one — so "a name, or a name and its operation" is a fact about the schema's shape and not a
- * branch each consumer writes for itself, slightly differently, until one of them forgets.
- */
-export declare const nameIn: (slot: Slot | undefined) => string | undefined;
+type Slot = PropertyKey | readonly [PropertyKey, Op | null];
+export declare const nameIn: (slot: Slot | undefined) => PropertyKey | undefined;
 export declare const opIn: (slot: Slot | undefined) => Op | undefined;
 /**
  * Flatten a schema into the transition relation — one `Edge` per rule, in schema order.
@@ -27,7 +20,7 @@ export declare const opIn: (slot: Slot | undefined) => Op | undefined;
  * column per fact, so nothing is taken apart here. Operations ride along as themselves; a row
  * off a JSON-loaded schema has none.
  */
-export declare function edges<T>(schema: T): Edge<Nodes<T> & string>[];
+export declare function edges<T>(schema: T): Edge<Nodes<T>>[];
 /**
  * Every state the schema names — its own keys, plus every target some rule leads to.
  *
@@ -38,7 +31,7 @@ export declare function edges<T>(schema: T): Edge<Nodes<T> & string>[];
  * at all, and reading the node set off `edges` alone would hide it from exactly the checks
  * meant to find it.
  */
-export declare function nodes<T>(schema: T): (Nodes<T> & string)[];
+export declare function nodes<T>(schema: T): Nodes<T>[];
 /**
  * Name an operation: its own name, or a name already read off a previous dump, passed
  * straight through since a dump cannot un-forget the code it forgot. Both fall back to `?`
@@ -66,19 +59,22 @@ export declare function nameOf(operation: Function | string | null | undefined, 
  * machine reads as nondeterministic where it is only conditional, and `validate` would call a
  * sound cell's second rule dead.
  */
-export declare function graph<T, Σ extends Carrier = Carrier, Λ extends Carrier = Carrier>(schema: T): Graph<IState<Nodes<T> & string, unknown>, Σ, Λ>;
+export declare function graph<T, Σ extends Carrier = Carrier, Λ extends Carrier = Carrier>(schema: T): Graph<IState<Nodes<T>, unknown>, Σ, Λ>;
 /**
- * The input alphabet, split by whether an event type carries anything — internal.
+ * The one type behind the two calls — `dispatch` and `can` — as a variadic tuple union:
+ * `[type]` for an event that carries nothing, `[type, payload]` for one that does.
  *
- * `dispatch` and `can` are declared as two overloads rather than one signature over a
- * variadic tuple, and this is what lets them be: one takes a type alone, the other a type and
- * its payload. Two plain parameters read as two parameters, and the compiler still refuses a
- * payload where there is nothing to attach and demands one where there is.
+ * One signature rather than the two overloads that used to split the alphabet by whether an
+ * event carries a payload. The correlation is the same — a payload is impossible where there is
+ * nothing to attach and mandatory where there is — but as a single tuple the editor offers every
+ * event name in one list, and a wrong name is reported against the concrete union of keys rather
+ * than an alias.
+ *
+ * Distributive on purpose: `keyof M` over a `Merge<…>` carrier does not reduce to a literal union
+ * on its own, so a mapped type over it stays symbolic. Distributing `K extends keyof M` folds each
+ * key separately, and the union comes out in literal shapes — `["coin"] | ["tick", { dt }]`.
  */
-type Bare<M extends Carrier> = {
-    [σ in keyof M]: void extends M[σ] ? σ : never;
-}[keyof M];
-type Loaded<M extends Carrier> = Exclude<keyof M, Bare<M>>;
+type Args<M extends Carrier> = keyof M extends infer K ? K extends keyof M ? void extends M[K] ? [type: K] : [type: K, payload: M[K]] : never : never;
 /** The reserved channel key a `Transition` rides on. */
 export declare const TRANSITION: unique symbol;
 /**
@@ -112,16 +108,16 @@ export interface Transition<Q extends Carrier, Σ extends Carrier, Λ extends Ca
  */
 export type AnyTransition = {
     readonly input: {
-        readonly type: string;
+        readonly type: PropertyKey;
     };
     readonly source: {
-        readonly type: string;
+        readonly type: PropertyKey;
     };
     readonly target: {
-        readonly type: string;
+        readonly type: PropertyKey;
     };
     readonly output?: {
-        readonly type: string;
+        readonly type: PropertyKey;
     };
     readonly at: number;
 };
@@ -139,13 +135,13 @@ export type AnyTransition = {
  */
 export type AnyMachine = {
     readonly state: {
-        readonly type: string;
+        readonly type: PropertyKey;
     };
     readonly rx: {
         on(msg: typeof TRANSITION, hear: (t: AnyTransition) => void): Off;
     };
-    can(type: string, payload?: unknown): boolean;
-    dispatch(type: string, payload?: unknown): boolean;
+    can(type: PropertyKey, payload?: unknown): boolean;
+    dispatch(type: PropertyKey, payload?: unknown): boolean;
     toJSON(): unknown;
 };
 /**
@@ -218,8 +214,7 @@ export declare class StateMachine<Q extends Carrier, Σ extends Carrier, Λ exte
      * without a speculative copy of the machine because the guard is the only thing that
      * decides.
      */
-    can<σ extends Bare<Σ> & string>(type: σ): boolean;
-    can<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
+    can(...args: Args<Σ>): boolean;
     /**
      * Feed one event, from wherever the machine now is. `true` if a transition fired.
      *
@@ -238,8 +233,7 @@ export declare class StateMachine<Q extends Carrier, Σ extends Carrier, Λ exte
      * `can` is not affected — it asks the guards a question and moves nothing, so it stays
      * answerable from inside a handler.
      */
-    dispatch<σ extends Bare<Σ> & string>(type: σ): boolean;
-    dispatch<σ extends Loaded<Σ> & string>(type: σ, payload: Σ[σ]): boolean;
+    dispatch(...args: Args<Σ>): boolean;
     /**
      * Move to a state directly (persistence, time travel). Sends nothing.
      *

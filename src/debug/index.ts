@@ -38,12 +38,12 @@ export type { History } from "./types.js";
  */
 function asEdge<Q extends Carrier, Σ extends Carrier, Λ extends Carrier>(
   t: Transition<Q, Σ, Λ>,
-): Edge<keyof Q & string> {
+): Edge<keyof Q> {
   return {
-    from: t.source.type as keyof Q & string,
-    on: t.input.type as string,
-    to: t.target.type as keyof Q & string,
-    ...(t.output && { emit: t.output.type as string }),
+    from: t.source.type as keyof Q,
+    on: t.input.type as keyof Σ,
+    to: t.target.type as keyof Q,
+    ...(t.output && { emit: t.output.type as keyof Λ }),
   };
 }
 

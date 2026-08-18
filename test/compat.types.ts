@@ -103,7 +103,7 @@ void [a1, a2, a3, a4, b1, b2, b3, c1, c2, d1, e1, e2, e3, f1];
     { type: "idle", context: { n: 0 } },
   );
   const any: AnyMachine = fsm;
-  const name: string = any.state.type;
+  const name: PropertyKey = any.state.type;
   void name;
 }
 

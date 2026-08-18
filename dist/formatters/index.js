@@ -48,10 +48,10 @@ import { WORDS, writer } from "./words.js";
 export const edgeLabel = (row) => {
     const when = nameOf(row.when, "when");
     const with_ = nameOf(row.with, "with");
-    return (`ON ${row.on}` +
+    return (`ON ${String(row.on)}` +
         (when ? ` WHEN ${when}` : "") +
         (with_ ? ` WITH ${with_}` : "") +
-        (row.emit ? ` EMIT ${row.emit}` : ""));
+        (row.emit ? ` EMIT ${String(row.emit)}` : ""));
 };
 const invert = (s) => `\x1b[7m${s}\x1b[0m`;
 const red = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -62,13 +62,13 @@ export const toMermaid = (schema, options) => {
     if (options?.direction)
         lines.push(`    direction ${options.direction}`);
     if (options?.start !== undefined)
-        lines.push(`    [*] --> ${options.start}`);
+        lines.push(`    [*] --> ${String(options.start)}`);
     const say = options?.label ?? edgeLabel;
     for (const row of edges(schema))
         lines.push(`    ${row.from} --> ${row.to}: ${say(row)}`);
     if (options?.current !== undefined) {
         lines.push("    classDef current fill:#4f46e5,color:#fff,font-weight:bold");
-        lines.push(`    class ${options.current} current`);
+        lines.push(`    class ${String(options.current)} current`);
     }
     return lines.join("\n");
 };
@@ -79,10 +79,10 @@ export const toDot = (schema, options) => {
         lines.push(`    rankdir=${options.direction};`);
     if (options?.start !== undefined) {
         lines.push("    __start [shape=point];");
-        lines.push(`    __start -> "${options.start}";`);
+        lines.push(`    __start -> "${String(options.start)}";`);
     }
     if (options?.current !== undefined)
-        lines.push(`    "${options.current}" [style=filled fillcolor="#4f46e5" fontcolor=white];`);
+        lines.push(`    "${String(options.current)}" [style=filled fillcolor="#4f46e5" fontcolor=white];`);
     const say = options?.label ?? edgeLabel;
     for (const row of edges(schema))
         lines.push(`    "${row.from}" -> "${row.to}" [label="${say(row)}"];`);
@@ -108,9 +108,9 @@ export const toTree = (schema, options) => {
         : nodes(schema)) {
         const outgoing = rows.filter((r) => r.from === node);
         const mark = options?.current === node ? " ●" : outgoing.length === 0 ? " ∎" : "";
-        const name = options?.color && options?.current === node ? invert(node) : node;
+        const name = options?.color && options?.current === node ? invert(String(node)) : String(node);
         lines.push(`${name}${mark}`);
-        outgoing.forEach((row, i) => lines.push(`  ${i === outgoing.length - 1 ? "└─" : "├─"} ${say(row)} → ${row.to}`));
+        outgoing.forEach((row, i) => lines.push(`  ${i === outgoing.length - 1 ? "└─" : "├─"} ${say(row)} → ${String(row.to)}`));
     }
     return lines.join("\n");
 };
