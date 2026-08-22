@@ -1,10 +1,10 @@
 {
   "name": "@evgkch/fsmjs",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publishConfig": {
     "access": "public"
   },
-  "description": "A small, typed Mealy state machine: one table of rules, a context that belongs to the state rather than the machine, and a graph that is a projection of the same object — serialize it, draw it, analyse it",
+  "description": "A small, typed Mealy state machine: one table of rules, a context that belongs to the state rather than the machine, and a graph that is a projection of the same object \u2014 serialize it, draw it, analyse it",
   "type": "module",
   "sideEffects": false,
   "files": [
@@ -38,7 +38,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run typecheck && npm run format:check && npm run build && npm test"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -65,6 +65,6 @@
   "license": "MIT",
   "homepage": "https://github.com/evgkch/fsmjs",
   "dependencies": {
-    "@evgkch/channeljs": "^1.1.0"
+    "@evgkch/channeljs": "^2.0.0"
   }
 }

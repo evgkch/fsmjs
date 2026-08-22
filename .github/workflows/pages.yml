@@ -22,9 +22,11 @@ jobs:
     steps:
       # The examples live in evgkch/fsmjs-examples and are pinned here as a
       # submodule: the site is whatever commit `examples` currently points at.
+      # Recursive, because the examples pin a submodule of their own — the
+      # shared tokens.
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
 
       - uses: actions/setup-node@v4
         with:
@@ -54,11 +56,13 @@ jobs:
           npm ci
           npm run build
 
+      # Built, then pressed: the machines drive, the widgets follow, nothing throws.
       - name: Build the examples
         working-directory: examples
         run: |
           npm ci
           npm run build
+          npm test
 
       - uses: actions/configure-pages@v5
 

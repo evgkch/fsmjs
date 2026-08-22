@@ -28,10 +28,11 @@ Complete, runnable examples live in a repository of their own, [`evgkch/fsmjs-ex
 | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [Installation](#installation)                                                            | Entry points, bundler requirements                                     |
 | [Quick Start](#quick-start)                                                              | The rule language, two examples                                        |
-| [`@evgkch/fsmjs`](#evgkchfsmjs)                                                          | `StateMachine` class, carriers, schema, bus, graph, JSON               |
+| [`@evgkch/fsmjs`](#evgkchfsmjs)                                                          | `StateMachine` class, carriers, schema, bus, serialization, asynchrony, graph, JSON   |
 | [`@evgkch/fsmjs/analysis`](#evgkchfsmjsanalysis)                                         | Reachability, issues, paths                                            |
 | [`@evgkch/fsmjs/formatters`](#evgkchfsmjsformatters)                                     | Tree, rules, Mermaid, DOT                                              |
 | [`@evgkch/fsmjs/debug`](#evgkchfsmjsdebug)                                               | Logging, invariants, history                                           |
+| [The inspector](#the-inspector)                                                          | The development tool: its pages and widgets                            |
 | [Limitations](#limitations)                                                              | Important notes for usage                                              |
 | [TypeScript compiler messages](#typescript-compiler-messages)                            | How to read type errors                                                |
 | [Formal definition and terminology](#formal-definition-and-terminology)                  | Mathematical model, notation                                           |
@@ -145,20 +146,18 @@ The item costs 50. The machine accepts coins of different denominations, accumul
 
 Each state stores its own context:
 
-- `idle` stores only the accumulated amount,
-- `paid` stores the amount and the change.
+- `idle` stores the accumulated amount and the change returned last time,
+- `paid` stores only the amount.
 
 ```ts
+import { StateMachine } from "@evgkch/fsmjs";
 import type { IState, IEvent, Merge } from "@evgkch/fsmjs";
 
-type Q = Merge<
-  | IState<"idle", { paid: number }>
-  | IState<"paid", { paid: number; change: number }>
->;
-type Σ  = Merge<
-  | IEvent<"coin", { value: number }>
-  | IEvent<"select">
->;
+type Idle = { paid: number; change: number };
+type Paid = { paid: number };
+
+type Q = Merge<IState<"idle", Idle> | IState<"paid", Paid>>;
+type Σ = Merge<IEvent<"coin", { value: number }> | IEvent<"select">>;
 type Λ = IEvent<"vend", { change: number }>;
 
 const PRICE = 50;
@@ -169,38 +168,35 @@ const vm = new StateMachine<Q, Σ, Λ>(
       coin: [
         {
           when: (ctx, { value }) => ctx.paid + value < PRICE,
-          to: ["idle", (ctx, { value }) => ({ paid: ctx.paid + value })],
+          to: [
+            "idle",
+            (ctx, { value }) => ({ paid: ctx.paid + value, change: 0 }),
+          ],
         },
         {
-          to: [
-            "paid",
-            (ctx, { value }) => ({
-              paid: ctx.paid + value,
-              change: ctx.paid + value - PRICE,
-            }),
-          ],
+          to: ["paid", (ctx, { value }) => ({ paid: ctx.paid + value })],
         },
       ],
     },
     paid: {
       select: [
         {
-          to: ["idle", () => ({ paid: 0 })],
-          emit: ["vend", (ctx) => ({ change: ctx.change })],
+          to: ["idle", (ctx) => ({ paid: 0, change: ctx.paid - PRICE })],
+          emit: ["vend", (ctx: Idle) => ({ change: ctx.change })],
         },
       ],
     },
   },
-  { type: "idle", context: { paid: 0 } },
+  { type: "idle", context: { paid: 0, change: 0 } },
 );
 
 vm.rx.on("vend", ({ change }) => console.log(`Change: ${change}`));
 vm.dispatch("coin", { value: 20 }); // idle → idle, paid=20
-vm.dispatch("coin", { value: 50 }); // idle → paid, paid=70, change=20
-vm.dispatch("select");              // dispense, change 20
+vm.dispatch("coin", { value: 50 }); // idle → paid, paid=70
+vm.dispatch("select");              // idle again — dispensed, change 20
 ```
 
-Notice: the context function paired with `paid` returns a context with both `paid` and `change`, while the one paired with `idle` returns only `paid`. The type system enforces exact correspondence: a state with a context must be given a context function, and a state without one must not.
+Each context function returns exactly the context of the state named beside it — `Idle` with `change`, `Paid` without — and the type system enforces the correspondence. On `select` the change is computed by `with` into the new `idle` context, and `by` reads it from there: `by` receives the context after the move. Its parameter is annotated because `to` written as a pair does not narrow the target for TypeScript's inference.
 
 ---
 
@@ -225,7 +221,7 @@ vm.state.type;    // 'idle'
 vm.state.context; // { paid: 0 }
 ```
 
-Context is tied to the state, so there is no separate getter for it – it always goes together with the type. Narrowing by `type` also narrows the context:
+Context is tied to the state, so there is no separate getter for it – it is returned together with the type. Narrowing by `type` also narrows the context:
 
 ```ts
 if (vm.state.type === "paid") {
@@ -363,9 +359,47 @@ vm.rx.on(TRANSITION, (t) => console.log(t));
 
 ### Atomicity and nested calls
 
-The state is committed before events are sent – handlers see the new state. An exception in a guard, a context function or a packer leaves the machine unchanged.
+The state is committed before events are sent – handlers run with the new state already in place. An exception in a guard, a context function or a packer leaves the machine unchanged.
 
 A nested `dispatch` on the same machine instance is **forbidden** – it throws `DispatchInsideHandlerError`. To feed an event back through `dispatch`, use `queueMicrotask` inside the `rx.on / rx.once` subscription.
+
+### Serialization
+
+`JSON.stringify(machine)` writes the graph — the schema with every operation reduced to a name. The machine's position is `machine.state`: a `{ type, context }` pair; JSON writes it whenever the context itself does, and a context with unserializable content gets its own `toJSON`. Restoring is the constructor:
+
+```ts
+const saved = JSON.stringify(vm.state);
+// …in another process, with the same schema:
+const vm2 = new StateMachine<Q, Σ, Λ>(schema, JSON.parse(saved));
+```
+
+A run serializes as the same pairs: a `history` record (`@evgkch/fsmjs/debug`) is ready JSON values.
+
+### Asynchrony
+
+`when`, `with` and `by` are synchronous. Asynchronous work runs outside the machine; its result is dispatched into it as an ordinary event. Two ways:
+
+**The result is computed before dispatching:**
+
+```ts
+button.addEventListener("click", async () => {
+  vm.dispatch("sign", { who, sig: await sign(who, text) });
+});
+```
+
+**Waiting is a state.** The request is sent as an output event, the answer comes back as an input event; in between, the machine is in a waiting state:
+
+```text
+FROM draft    ON submit  TO checking EMIT gate
+FROM checking ON checked TO review
+```
+
+```ts
+vm.rx.on("gate", async ({ text }) => {
+  // After the `await`, execution resumes outside the current transition: this dispatch is not nested.
+  vm.dispatch("checked", await check(text));
+});
+```
 
 ### Reading the schema without a machine
 
@@ -379,7 +413,7 @@ const allNodes = nodes(schema);   // string[] – all states
 const graphObj = graph(schema);   // Graph<...> – same as toJSON
 ```
 
-`nodes` returns the union of the schema's keys and every rule's target state. The list therefore includes a state written with an empty cell (`ghost: {}`), which has no edges at all, as well as a state that only ever appears as a target. Walking the edges alone would lose both cases, and for `analyze` they matter.
+`nodes` returns the union of the schema's keys and every rule's target state. The list therefore includes a state written with an empty cell (`ghost: {}`), which has no edges at all, as well as a state that only ever appears as a target.
 
 The same entry point exports `nameOf(operation, slot)`. It is used by `toJSON` and by the formatters, so operation names agree across every representation of a schema. A custom renderer should call it rather than reconstruct the name itself.
 
@@ -401,7 +435,7 @@ The same entry point exports `nameOf(operation, slot)`. It is used by `toJSON` a
 }
 ```
 
-The JSON has the same shape as the schema in code, and that shape settles `emit`: `["vend", "refund"]` is one event with its packer, never a list of two events.
+The JSON has the same shape as the schema in code, and the shape is unambiguous for `emit` too: `["vend", "refund"]` is one event with its packer, never a list of two events.
 
 Such a schema can be drawn and checked, but it can also be passed to the constructor. A name in place of a function is read as that function's neutral value: a guard as a condition that holds, a context function as the identity, a packer as no data at all. A machine restored from JSON walks its graph but computes nothing: the context is carried into the target state unchanged, and output events are sent without data.
 
@@ -475,7 +509,7 @@ Returns four lists of states:
 | `terminal`    | no outgoing transitions                  |
 
 > [!WARNING]
-> `start` is optional, but without it reachability is not computed at all: `reachable` and `unreachable` come back empty. This means `validate(schema)` with no second argument silently reports no unreachable states.
+> `start` is optional, but without it reachability is not computed at all: `reachable` and `unreachable` come back empty. This means `validate(schema)` with no second argument reports no `unreachable` findings at all.
 
 ### `validate`
 
@@ -583,7 +617,7 @@ Column widths are computed over the whole schema at once, so lines are aligned w
 
 ## `@evgkch/fsmjs/debug`
 
-Observing a running machine. All four functions subscribe to `TRANSITION`, so only transitions that actually happened are visible to them. A `dispatch` that returned `false`, and `restore`, publish no events and do not show up here.
+Observing a running machine. All four functions subscribe to `TRANSITION`, so they receive only transitions that actually happened. A `dispatch` that returned `false`, and `restore`, publish no events and do not show up here.
 
 ```ts
 function log(fsm, sink?: (t: Transition) => void): Off;
@@ -639,16 +673,31 @@ invariant(vm, (ctx) => ctx.paid >= 0);
 | `rx`                 | publishes `moved` with the new index when history moves the machine  |
 | `stop()`             | stop recording and unsubscribe from transitions      |
 
-Navigation goes through `fsm.restore`: nothing is replayed and no `Transition` is published, which is why the history does not record its own steps. It publishes `moved` on its own `rx` instead, so that anything rendering the machine learns the view changed. The next `dispatch` after an undo discards everything recorded ahead of it.
+Navigation goes through `fsm.restore`: nothing is replayed and no `Transition` is published, which is why the history does not record its own steps. It publishes `moved` on its own `rx` instead — the signal to redraw anything that renders the machine. The next `dispatch` after an undo discards everything recorded ahead of it.
 
-`maxSize` (at least 1) caps the buffer. Once it is full the oldest record is dropped, and undo then reaches back no further than `maxSize` transitions.
+`maxSize` (at least 1) caps the buffer. Once it is full the oldest record is dropped, and undo then goes back no further than `maxSize` transitions.
 
 Exported type: `History`.
 
 ---
 
+## The inspector
+
+[`@evgkch/fsmjs-inspector`](https://github.com/evgkch/fsmjs-inspector) is the development tool for this library's machines: the rule text, the transition figure, the classic diagram and the run, joined by shared highlighting. It reads a dumped schema — [open the inspector](https://evgkch.github.io/fsmjs-inspector/) — or attaches to a running machine with one line:
+
+```ts
+import { inspect } from "@evgkch/fsmjs-inspector";
+
+const cart = inspect(new StateMachine(schema, start), { name: "cart" });
+```
+
+The inspector's widgets also attach one at a time, without raising the whole inspector: this repository's examples draw their machines with them ([open the examples](https://evgkch.github.io/fsmjs/)).
+
+---
+
 ## Limitations
 
+- The schema is read once, in the constructor. Mutating the schema object afterwards does not change the machine's behaviour — build a new machine instead.
 - **`when` must be pure.** Otherwise `can` and `dispatch` stop agreeing on the same question.
 - **An unconditional rule, if present, must be last.** Rules after it are unreachable; `validate` reports this as a `dead-rule` error.
 - **The context function must return a new object.** The context is frozen after the transition, and changing it in place raises an error. Freezing is on when `process` is unavailable or `NODE_ENV !== 'production'`; it is also shallow and does not extend to nested objects. In production nothing prevents a mutation of the context, so the rule is kept by the developer and the check merely helps catch a violation while debugging.
